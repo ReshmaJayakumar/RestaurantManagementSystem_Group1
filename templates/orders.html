@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - In-House Orders</title>
+</head>
+<body>
+    <h1>Take In-House Order</h1>
+    <form id="order-form" method="POST" action="/orders">
+        <label for="order_type">Order Type:</label>
+        <select id="order_type" name="order_type" required>
+            <option value="Dine-in">Dine-in</option>
+            <option value="Takeout">Takeout</option>
+            <option value="Phone Order">Phone Order</option>
+            <option value="Online">Online</option>
+        </select>
+        <label for="table_number">Table Number:</label>
+        <input type="number" id="table_number" name="table_number">
+        <div>
+            <label for="employee_id">Employee ID:</label>
+            <input type="text" id="employee_id" name="employee_id" required>
+        </div>
+        <div id="order-items">
+            <label for="order_items">Select Items:</label>
+            <input type="text" name="order_items[]" placeholder="Item 1">
+            <input type="number" name="quantity[]" placeholder="Quantity">
+            <input type="text" name="customizations[]" placeholder="Customizations">
+        </div>
+        <button type="button" onclick="addItem()">Add Another Item</button>
+        <button type="submit">Submit Order</button>
+    </form>
+    <script>
+        function addItem() {
+            const orderItemsDiv = document.getElementById('order-items');
+            const newItem = document.createElement('div');
+            newItem.innerHTML = `
+                <input type="text" name="order_items[]" placeholder="Item">
+                <input type="number" name="quantity[]" placeholder="Quantity">
+                <input type="text" name="customizations[]" placeholder="Customizations">
+            `;
+            orderItemsDiv.appendChild(newItem);
+        }w
+    </script>
+</body>
+</html>
