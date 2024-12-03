@@ -168,7 +168,48 @@ def check_compliance_deadlines():
     """
     return fetch_data(query)
 
-# Console application menu
+# Financial reports submenu
+def financial_reports_menu():
+    print("Financial Reports Management")
+    print("1. View Daily Financial Report")
+    print("2. View Weekly Financial Report")
+    print("3. View Monthly Financial Report")
+    print("4. View Yearly Financial Report")
+    print("5. Back to Main Menu")
+
+# User management submenu
+def user_management_menu():
+    print("User Management")
+    print("1. View Users")
+    print("2. Create User")
+    print("3. Delete User")
+    print("4. Change User Role")
+    print("5. Back to Main Menu")
+
+# Customer analytics submenu
+def customer_analytics_menu():
+    print("Customer Analytics")
+    print("1. Monitor Customer Trends")
+    print("2. Review Customer Feedback")
+    print("3. Back to Main Menu")
+
+# Promotion management submenu
+def promotion_management_menu():
+    print("Promotion Management")
+    print("1. View Promotions")
+    print("2. Add Promotion")
+    print("3. Delete Promotion")
+    print("4. Back to Main Menu")
+
+# Compliance management submenu
+def compliance_management_menu():
+    print("Compliance Management")
+    print("1. View Compliance Info")
+    print("2. Review Compliance Info")
+    print("3. Check Compliance Deadlines")
+    print("4. Back to Main Menu")
+
+# Main menu
 def menu():
     print("Restaurant Management System")
     print("1. View & Download Financial Reports")
@@ -179,44 +220,36 @@ def menu():
     print("6. Compliance Management")
     print("7. Exit")
 
-def user_management_menu():
-    print("User Management")
-    print("1. View Users")
-    print("2. Create User")
-    print("3. Delete User")
-    print("4. Change User Role")
-    print("5. Back to Main Menu")
-
-def customer_analytics_menu():
-    print("Customer Analytics")
-    print("1. Monitor Customer Trends")
-    print("2. Review Customer Feedback")
-    print("3. Back to Main Menu")
-
-def promotion_management_menu():
-    print("Promotion Management")
-    print("1. View Promotions")
-    print("2. Add Promotion")
-    print("3. Delete Promotion")
-    print("4. Back to Main Menu")
-
-def compliance_management_menu():
-    print("Compliance Management")
-    print("1. View Compliance Info")
-    print("2. Review Compliance Info")
-    print("3. Check Compliance Deadlines")
-    print("4. Back to Main Menu")
-
+# Main program flow
 def main():
     while True:
         menu()
         choice = input("Enter your choice: ")
-        
+
         if choice == '1':
-            filter_type = input("Enter filter type (daily, weekly, monthly, yearly): ")
-            df = generate_financial_report(filter_type)
-            if df is not None:
-                print(df)
+            while True:
+                financial_reports_menu()
+                report_choice = input("Enter your choice: ")
+                if report_choice == '1':
+                    df = generate_financial_report('daily')
+                    if df is not None:
+                        print(df)
+                elif report_choice == '2':
+                    df = generate_financial_report('weekly')
+                    if df is not None:
+                        print(df)
+                elif report_choice == '3':
+                    df = generate_financial_report('monthly')
+                    if df is not None:
+                        print(df)
+                elif report_choice == '4':
+                    df = generate_financial_report('yearly')
+                    if df is not None:
+                        print(df)
+                elif report_choice == '5':
+                    break
+                else:
+                    print("Invalid action.")
         elif choice == '2':
             while True:
                 user_management_menu()
