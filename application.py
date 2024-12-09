@@ -12,79 +12,75 @@ def get_db_connection():
                           'Trusted_Connection=yes;')
     return conn
 
+#--------- Add or Update menu item   ----------
 
-
-# Route to add a menu item
-@app.route('/menu/add', methods=['POST'])
-def add_menu_item():
+# Route to add or update a menu item
+@app.route('/menu/add_update', methods=['POST', 'PUT'])
+def add_or_update_menu_item():
     try:
         data = request.json
+        # Check for required fields in the request data
         if not data or not all(key in data for key in ('name', 'description', 'price', 'category', 'is_available', 'quantity_available', 'manager_id')):
             return jsonify({'error': 'Missing required fields'}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Insert into menu_items table
-        cursor.execute('''
-            INSERT INTO menu_items (name, description, price, category, is_available)
-            VALUES (?, ?, ?, ?, ?)
-        ''', data['name'], data['description'], data['price'], data['category'], data['is_available'])
-        conn.commit()
-
-        # Get the id of the newly added menu item
-        cursor.execute('SELECT SCOPE_IDENTITY()')
-        item_id = cursor.fetchone()[0]
-
-        # Insert into inventory table
-        cursor.execute('''
-            INSERT INTO inventory (menu_item_id, quantity_available, last_updated, manager_id)
-            VALUES (?, ?, GETDATE(), ?)
-        ''', item_id, data['quantity_available'], data['manager_id'])
-        conn.commit()
-
-        cursor.close()
-        conn.close()
-        return jsonify({'message': 'Menu item added successfully'}), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# Route to update a menu item
-@app.route('/menu/update', methods=['PUT'])
-def update_menu_item():
-    try:
-        data = request.json
-        if not data or 'menu_item_id' not in data:
-            return jsonify({'error': 'Missing menu_item_id'}), 400
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Update menu_items table
-        cursor.execute('''
-            UPDATE menu_items
-            SET name = ?, description = ?, price = ?, category = ?, is_available = ?
-            WHERE id = ?
-        ''', data.get('name'), data.get('description'), data.get('price'), data.get('category'),
-            data.get('is_available'), data['menu_item_id'])
-        conn.commit()
-
-        # Update inventory table if quantity_available is provided
-        if 'quantity_available' in data:
+        if request.method == 'POST':  # Add new menu item
+            # Insert into menu_items table
             cursor.execute('''
-                UPDATE inventory
-                SET quantity_available = ?, last_updated = GETDATE()
-                WHERE menu_item_id = ?
-            ''', data['quantity_available'], data['menu_item_id'])
+                INSERT INTO menu_items (name, description, price, category, is_available)
+                VALUES (?, ?, ?, ?, ?)
+            ''', data['name'], data['description'], data['price'], data['category'], data['is_available'])
             conn.commit()
 
+            # Get the id of the newly added menu item
+            cursor.execute('SELECT SCOPE_IDENTITY()')
+            item_id = cursor.fetchone()[0]
+
+            # Insert into inventory table
+            cursor.execute('''
+                INSERT INTO inventory (menu_item_id, quantity_available, last_updated, manager_id)
+                VALUES (?, ?, GETDATE(), ?)
+            ''', item_id, data['quantity_available'], data['manager_id'])
+            conn.commit()
+
+            message = 'Menu item added successfully'
+
+        elif request.method == 'PUT':  # Update existing menu item
+            if 'id' not in data:
+                return jsonify({'error': 'Missing id'}), 400  # Ensure 'id' is provided for updating
+
+            # Update menu_items table
+            cursor.execute('''
+                UPDATE menu_items
+                SET name = ?, description = ?, price = ?, category = ?, is_available = ?
+                WHERE id = ?  -- Using 'id' to update the item
+            ''', data['name'], data['description'], data['price'], data['category'], data['is_available'], data['id'])
+            conn.commit()
+
+            # Update inventory table if quantity_available is provided
+            if 'quantity_available' in data:
+                cursor.execute('''
+                    UPDATE inventory
+                    SET quantity_available = ?, last_updated = GETDATE()
+                    WHERE menu_item_id = ?
+                ''', data['quantity_available'], data['id'])  # Use 'id' in the inventory table
+                conn.commit()
+
+            message = 'Menu item updated successfully'
+
         cursor.close()
-        conn.close()
-        return jsonify({'message': 'Menu item updated successfully'}), 200
+        # conn.close()
+        return jsonify({'message': message}), 200
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Route to remove a menu item
+
+
+#------ Remove menu items -----
+
 @app.route('/menu/remove', methods=['DELETE'])
 def remove_menu_item():
     try:
@@ -92,22 +88,35 @@ def remove_menu_item():
         if not data or 'menu_item_id' not in data:
             return jsonify({'error': 'Missing menu_item_id'}), 400
 
+        menu_item_id = data['menu_item_id']
         conn = get_db_connection()
         cursor = conn.cursor()
 
         # Remove from inventory table
-        cursor.execute('DELETE FROM inventory WHERE menu_item_id = ?', data['menu_item_id'])
+        cursor.execute('DELETE FROM inventory WHERE menu_item_id = ?', menu_item_id)
         conn.commit()
 
         # Remove from menu_items table
-        cursor.execute('DELETE FROM menu_items WHERE id = ?', data['menu_item_id'])
+        cursor.execute('DELETE FROM menu_items WHERE id = ?', menu_item_id)
         conn.commit()
 
         cursor.close()
-        conn.close()
         return jsonify({'message': 'Menu item removed successfully'}), 200
+
+    except pyodbc.IntegrityError:
+        return jsonify({'error': 'Cannot delete due to foreign key constraints.'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# Consolidate all other routes here (add, update, etc.)...
+# Ensure you have only one app.run() at the bottom
+
+# if __name__ == '__main__':
+#     app.run(debug=True)
+
+
+
+#-------------  View menu items by categories -------
 
 # Route to view menu items organized by categories
 @app.route('/menu/view', methods=['GET'])
@@ -130,54 +139,26 @@ def view_menu():
                 'is_available': item[5]
             })
         cursor.close()
-        conn.close()
+        # conn.close()
         return jsonify(menu), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True)
-
-    
-
-###--------  feedback  -----------
+# if __name__ == '__main__':
+#     app.run(debug=True)
 
 
 
-# Route to add customer feedback
-@app.route('/feedback/add', methods=['POST'])
-def add_feedback():
-    try:
-        # Get the JSON data from the request
-        data = request.json
-        if not data or not all(key in data for key in ('EmployeeID', 'FeedbackType', 'Description')):
-            return jsonify({'error': 'Missing required fields'}), 400
-        
-        # Connect to the database
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Insert feedback into the Feedback table
-        cursor.execute('''
-            INSERT INTO Feedback (EmployeeID, FeedbackType, Description, CreatedAt, ReviewStatus)
-            VALUES (?, ?, ?, GETDATE(), 'Pending')
-        ''', data['EmployeeID'], data['FeedbackType'], data['Description'])
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
+# ###--------  feedback  -----------
 
-        return jsonify({'message': 'Feedback added successfully'}), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
-# Route to view all feedback
+# Route to view all feedback with urgency flag in the review status
 @app.route('/feedback/view', methods=['GET'])
 def view_feedback():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM Feedback')
+        cursor.execute('SELECT FeedbackID, EmployeeID, FeedbackType, Description, CreatedAt, ReviewStatus FROM Feedback')
         feedback = cursor.fetchall()
         feedback_list = [{
             'FeedbackID': row[0],
@@ -188,12 +169,13 @@ def view_feedback():
             'ReviewStatus': row[5]
         } for row in feedback]
         cursor.close()
-        conn.close()
+        # conn.close()
         return jsonify(feedback_list), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Route to respond to feedback and categorize it
+
+# Route to respond to feedback and categorize it, with urgent feedback flagging
 @app.route('/feedback/respond', methods=['POST'])
 def respond_to_feedback():
     try:
@@ -201,8 +183,16 @@ def respond_to_feedback():
         if not data or not all(key in data for key in ('FeedbackID', 'Response', 'Category')):
             return jsonify({'error': 'Missing required fields'}), 400
 
+        # Check if the feedback should be flagged as urgent based on Response or Category
+        urgency_flag = False
+        if 'Urgent' in data.get('Response', '') or 'Urgent' in data.get('Category', ''):
+            urgency_flag = True
+            data['Response'] = f"{data['Response']} - Urgent"
+
         conn = get_db_connection()
         cursor = conn.cursor()
+        
+        # Update feedback response, category, and review status (flagging urgent feedback if needed)
         cursor.execute('''
             UPDATE Feedback
             SET ReviewStatus = ?, FeedbackType = ?
@@ -210,40 +200,124 @@ def respond_to_feedback():
         ''', data['Response'], data['Category'], data['FeedbackID'])
         conn.commit()
         cursor.close()
-        conn.close()
+        # conn.close()
 
         return jsonify({'message': 'Feedback updated successfully'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Route to flag urgent feedback
-@app.route('/feedback/flag', methods=['POST'])
-def flag_feedback():
+
+# Route to add customer feedback (without UrgencyFlag in table, logic handled in response)
+@app.route('/feedback/add', methods=['POST'])
+def add_feedback():
     try:
         data = request.json
-        if not data or 'FeedbackID' not in data:
+        if not data or not all(key in data for key in ('EmployeeID', 'FeedbackType', 'Description')):
             return jsonify({'error': 'Missing required fields'}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor()
+
+        # Insert feedback into the Feedback table
         cursor.execute('''
-            UPDATE Feedback
-            SET FeedbackType = 'Urgent'
-            WHERE FeedbackID = ?
-        ''', data['FeedbackID'])
+            INSERT INTO Feedback (EmployeeID, FeedbackType, Description, CreatedAt, ReviewStatus)
+            VALUES (?, ?, ?, GETDATE(), 'Pending')
+        ''', data['EmployeeID'], data['FeedbackType'], data['Description'])
+
+        # Check if feedback is urgent and update accordingly
+        if 'Urgent' in data.get('FeedbackType', ''):
+            cursor.execute('''
+                UPDATE Feedback
+                SET ReviewStatus = 'Urgent'
+                WHERE FeedbackID = (SELECT MAX(FeedbackID) FROM Feedback)
+            ''')
+            conn.commit()
+
         conn.commit()
         cursor.close()
-        conn.close()
+        # conn.close()
 
-        return jsonify({'message': 'Feedback flagged as urgent'}), 200
+        return jsonify({'message': 'Feedback added successfully'}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
+# if __name__ == '__main__':
+#     app.run(debug=True)
 
 
-#----------  employeemanagement ----
+#----------- Inventory management  -----------
+
+@app.route('/inventory/view', methods=['GET'])
+def view_inventory():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Join inventory with menu_items to get more detailed information
+        cursor.execute('''
+            SELECT i.id, i.menu_item_id, i.quantity_available, i.last_updated, i.manager_id,
+                   m.name AS menu_item_name, m.category AS menu_item_category
+            FROM inventory i
+            JOIN menu_items m ON i.menu_item_id = m.id
+        ''')
+        inventory_items = cursor.fetchall()
+        inventory_list = [{
+            'id': row[0],
+            'menu_item_id': row[1],
+            'quantity_available': row[2],
+            'last_updated': row[3],
+            'manager_id': row[4],
+            'menu_item_name': row[5],
+            'menu_item_category': row[6]
+        } for row in inventory_items]
+        
+        cursor.close()
+        # conn.close()
+        
+        return jsonify(inventory_list), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# if __name__ == '__main__':
+#     app.run(debug=True)
+
+#-------  Alert for low inventory -----
+
+@app.route('/inventory/alerts', methods=['GET'])
+def inventory_alerts():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Query for low inventory (e.g., threshold of 10 units)
+        cursor.execute('''
+            SELECT i.id, i.menu_item_id, i.quantity_available, m.name AS menu_item_name
+            FROM inventory i
+            JOIN menu_items m ON i.menu_item_id = m.id
+            WHERE i.quantity_available < 10
+        ''')
+        low_inventory = cursor.fetchall()
+        low_inventory_list = [{
+            'id': row[0],
+            'menu_item_id': row[1],
+            'quantity_available': row[2],
+            'menu_item_name': row[3]
+        } for row in low_inventory]
+        
+        cursor.close()
+        # conn.close()
+        
+        return jsonify(low_inventory_list), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+  
+
+# if __name__ == '__main__':
+#     app.run(debug=True)
+
+
+# #----------  employeemanagement ----
 
 
 # Route to add a new employee
@@ -262,7 +336,7 @@ def add_employee():
         ''', data['Name'], data['PhoneNumber'], data['RoleID'], data['StartDate'], data['PasswordHash'])
         conn.commit()
         cursor.close()
-        conn.close()
+        # conn.close()
 
         return jsonify({'message': 'Employee added successfully'}), 201
     except Exception as e:
@@ -342,165 +416,7 @@ def view_employees():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Route to track employee availability (bonus)
-@app.route('/employee/availability/add', methods=['POST'])
-def add_availability():
-    try:
-        data = request.json
-        if not data or not all(key in data for key in ('EmployeeID', 'Date', 'DayOfWeek', 'AvailableStartTime', 'AvailableEndTime')):
-            return jsonify({'error': 'Missing required fields'}), 400
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO EmployeeAvailability (EmployeeID, Date, DayOfWeek, AvailableStartTime, AvailableEndTime, Status)
-            VALUES (?, ?, ?, ?, ?, 'Active')
-        ''', data['EmployeeID'], data['Date'], data['DayOfWeek'], data['AvailableStartTime'], data['AvailableEndTime'])
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        return jsonify({'message': 'Availability added successfully'}), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
 
-
-#----------- payment management -----
-
-
-# Route to configure payment methods
-@app.route('/payment/methods/configure', methods=['POST'])
-def configure_payment_methods():
-    try:
-        data = request.json
-        if not data or 'PaymentMethods' not in data:
-            return jsonify({'error': 'Missing payment methods'}), 400
-
-        # Assuming payment methods are stored in a PaymentMethods table
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        for method in data['PaymentMethods']:
-            cursor.execute('''
-                INSERT INTO PaymentMethods (PaymentMethod) VALUES (?)
-            ''', method)
-
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        return jsonify({'message': 'Payment methods configured successfully'}), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# Route to process payments
-@app.route('/payment/process', methods=['POST'])
-def process_payment():
-    try:
-        data = request.json
-        required_fields = ['OrderID', 'EmployeeID', 'PaymentMethod', 'Amount', 'DiscountApplied']
-        if not data or not all(field in data for field in required_fields):
-            return jsonify({'error': 'Missing required fields'}), 400
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            INSERT INTO Payments (OrderID, EmployeeID, PaymentMethod, DiscountApplied, Amount, PaymentDate, PaymentStatus)
-            VALUES (?, ?, ?, ?, ?, GETDATE(), 'Completed')
-        ''', data['OrderID'], data['EmployeeID'], data['PaymentMethod'], data['DiscountApplied'], data['Amount'])
-
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        return jsonify({'message': 'Payment processed successfully'}), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# Route to issue refunds
-@app.route('/payment/refund', methods=['POST'])
-def issue_refund():
-    try:
-        data = request.json
-        required_fields = ['OrderID', 'PaymentID', 'EmployeeID', 'RefundAmount', 'RefundMethod']
-        if not data or not all(field in data for field in required_fields):
-            return jsonify({'error': 'Missing required fields'}), 400
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute('''
-            INSERT INTO Refunds (OrderID, PaymentID, EmployeeID, RefundAmount, RefundMethod, RefundDate)
-            VALUES (?, ?, ?, ?, ?, GETDATE())
-        ''', data['OrderID'], data['PaymentID'], data['EmployeeID'], data['RefundAmount'], data['RefundMethod'])
-
-        cursor.execute('''
-            UPDATE Payments SET PaymentStatus = 'Refunded' WHERE PaymentID = ?
-        ''', data['PaymentID'])
-
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        return jsonify({'message': 'Refund issued successfully'}), 201
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# Route to view transaction reports
-@app.route('/payment/reports', methods=['GET'])
-def view_transaction_reports():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM Payments')
-        payments = cursor.fetchall()
-        payment_list = [{
-            'PaymentID': row[0],
-            'OrderID': row[1],
-            'EmployeeID': row[2],
-            'PaymentMethod': row[3],
-            'DiscountApplied': row[4],
-            'Amount': row[5],
-            'PaymentDate': row[6],
-            'PaymentStatus': row[7]
-        } for row in payments]
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(payment_list), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# Route to notify manager of failed or incomplete transactions
-@app.route('/payment/failed', methods=['GET'])
-def failed_transactions():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM Payments WHERE PaymentStatus = \'Failed\' OR PaymentStatus = \'Incomplete\'')
-        failed_payments = cursor.fetchall()
-        failed_list = [{
-            'PaymentID': row[0],
-            'OrderID': row[1],
-            'EmployeeID': row[2],
-            'PaymentMethod': row[3],
-            'DiscountApplied': row[4],
-            'Amount': row[5],
-            'PaymentDate': row[6],
-            'PaymentStatus': row[7]
-        } for row in failed_payments]
-
-        cursor.close()
-        conn.close()
-
-        return jsonify(failed_list), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True)
